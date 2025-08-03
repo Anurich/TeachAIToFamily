@@ -11,7 +11,7 @@ from langchain_core.messages import ToolMessage, HumanMessage
 
 from langchain.globals import set_debug
 
-set_debug(False)
+set_debug(True)
 
 load_dotenv()
 #state
@@ -187,43 +187,44 @@ def final_answer(state: State):
     state["messages"].append(json.loads(output.content.replace("```json", "").replace("```", "")))
     return state
 
+def get_workflow():
+    graph = StateGraph(state_schema=State)
 
-graph = StateGraph(state_schema=State)
-
-graph.add_node("boss", node_1)
-graph.add_node("node_2",agent_2)
-graph.add_node("tool_node", tool_node)
-graph.add_node("final_answer", final_answer)
-graph.set_entry_point("boss")
-graph.add_conditional_edges(
-    "boss", conditional_check, 
-    {
-        "call_next": "node_2",
+    graph.add_node("boss", node_1)
+    graph.add_node("node_2",agent_2)
+    graph.add_node("tool_node", tool_node)
+    graph.add_node("final_answer", final_answer)
+    graph.set_entry_point("boss")
+    graph.add_conditional_edges(
+        "boss", conditional_check, 
+        {
+            "call_next": "node_2",
+            "__end__": END
+        }
+    )
+    graph.add_conditional_edges("node_2", should_continue, {
+        "continue": "tool_node",
         "__end__": END
-    }
-)
-graph.add_conditional_edges("node_2", should_continue, {
-    "continue": "tool_node",
-    "__end__": END
-})
-graph.add_edge("tool_node", "final_answer")
-graph.add_edge("final_answer", END)
+    })
+    graph.add_edge("tool_node", "final_answer")
+    graph.add_edge("final_answer", END)
+    from langgraph.checkpoint.memory import InMemorySaver
 
-workflow = graph.compile()
+    workflow = graph.compile(checkpointer=InMemorySaver())
 
-import os 
-png_graph_bytes = workflow.get_graph().draw_mermaid_png()
-output_file_path = "my_langgraph.png"
-with open(output_file_path, "wb") as f:
-    f.write(png_graph_bytes)
+    import os 
+    png_graph_bytes = workflow.get_graph().draw_mermaid_png()
+    output_file_path = "my_langgraph.png"
+    with open(output_file_path, "wb") as f:
+        f.write(png_graph_bytes)
 
-print(f"Graph saved as '{output_file_path}' in {os.getcwd()}")
+    print(f"Graph saved as '{output_file_path}' in {os.getcwd()}")
 
-ot = workflow.invoke({
-    "messages": [("user", "can you tell me about company status of tata motors?")]
-})
+    # ot = workflow.invoke({
+    #     "messages": [("user", "can you tell me about company status of tata motors?")]
+    # })
 
-print(ot["messages"][-1])
-
+    # print(ot["messages"][-1])
+    return workflow
 
 
